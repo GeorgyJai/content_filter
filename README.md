@@ -45,9 +45,6 @@ content-filter/
 │   └── rabbitmq/              # RabbitMQ конфигурация
 │       ├── rabbitmq.conf
 │       └── definitions.json
-├── docs/                        # Документация
-├── plans/                       # Планы разработки
-├── tests/                       # Тесты
 ├── docker-compose.yml          # Docker Compose конфигурация
 ├── requirements.txt            # Python зависимости
 └── README.md                   # Этот файл
