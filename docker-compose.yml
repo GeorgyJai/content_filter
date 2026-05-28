@@ -1,0 +1,371 @@
+services:
+  # PostgreSQL с расширением pgvector
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: content_filter_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-content_filter_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./infrastructure/postgres/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - content_filter_network
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: content_filter_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin_password}
+    ports:
+      - "5672:5672"   # AMQP порт
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./infrastructure/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./infrastructure/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - content_filter_network
+
+  # User Service
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    container_name: content_filter_user_service
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_password}@postgres:5432/${POSTGRES_DB:-content_filter_db}
+      GRPC_PORT: 50051
+      GRPC_MAX_WORKERS: 10
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SQL_ECHO: ${SQL_ECHO:-false}
+    ports:
+      - "50051:50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+
+  # Feedback Service
+  feedback-service:
+    build:
+      context: .
+      dockerfile: services/feedback-service/Dockerfile
+    container_name: content_filter_feedback_service
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-content_filter_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      GRPC_PORT: 50055
+      RANKING_SERVICE_HOST: ranking-service
+      RANKING_SERVICE_PORT: 50053
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "50055:50055"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+
+  # Bot Service
+  bot-service:
+    build:
+      context: .
+      dockerfile: services/bot-service/Dockerfile
+    container_name: content_filter_bot_service
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      USER_SERVICE_HOST: user-service
+      USER_SERVICE_PORT: 50051
+      DIGEST_SERVICE_HOST: digest-service
+      DIGEST_SERVICE_PORT: 50052
+      FEEDBACK_SERVICE_HOST: feedback-service
+      FEEDBACK_SERVICE_PORT: 50055
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./shared/proto:/app/proto
+    depends_on:
+      - user-service
+      - feedback-service
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+
+  # Telegram Collector Service
+  collector-telegram:
+    build:
+      context: ./services/collector-telegram
+      dockerfile: Dockerfile
+    container_name: content_filter_collector_telegram
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_PHONE: ${TELEGRAM_PHONE:-}
+      TELEGRAM_SESSION_NAME: /app/sessions/collector_session
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin_password}
+      RABBITMQ_EXCHANGE: content_exchange
+      RABBITMQ_ROUTING_KEY: raw.telegram
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-content_filter_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      POLL_INTERVAL: ${POLL_INTERVAL:-60}
+      MAX_MESSAGES_PER_CHANNEL: ${MAX_MESSAGES_PER_CHANNEL:-50}
+    volumes:
+      - telegram_sessions:/app/sessions
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+
+  # VK Collector Service
+  collector-vk:
+    build:
+      context: ./services/collector-vk
+      dockerfile: Dockerfile
+    container_name: content_filter_collector_vk
+    environment:
+      VK_API_VERSION: ${VK_API_VERSION:-5.131}
+      VK_CONFIRMATION_TOKEN: ${VK_CONFIRMATION_TOKEN}
+      VK_SECRET_KEY: ${VK_SECRET_KEY}
+      VK_ACCESS_TOKEN: ${VK_ACCESS_TOKEN:-}
+      HOST: 0.0.0.0
+      PORT: 8080
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin_password}
+      RABBITMQ_EXCHANGE: content_exchange
+      RABBITMQ_ROUTING_KEY: raw.vk
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+
+  # YouTube Collector Service
+  collector-youtube:
+    build:
+      context: ./services/collector-youtube
+      dockerfile: Dockerfile
+    container_name: content_filter_collector_youtube
+    environment:
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+      YOUTUBE_API_VERSION: ${YOUTUBE_API_VERSION:-v3}
+      YOUTUBE_CHANNELS: ${YOUTUBE_CHANNELS:-}
+      POLL_INTERVAL_SECONDS: ${YOUTUBE_POLL_INTERVAL_SECONDS:-300}
+      MAX_RESULTS_PER_CHANNEL: ${YOUTUBE_MAX_RESULTS_PER_CHANNEL:-10}
+      ENABLE_TRANSCRIPTION: ${YOUTUBE_ENABLE_TRANSCRIPTION:-false}
+      WHISPER_MODEL: ${YOUTUBE_WHISPER_MODEL:-base}
+      TRANSCRIPTION_LANGUAGE: ${YOUTUBE_TRANSCRIPTION_LANGUAGE:-ru}
+      TEMP_DOWNLOAD_DIR: /tmp/youtube_downloads
+      MAX_VIDEO_DURATION_MINUTES: ${YOUTUBE_MAX_VIDEO_DURATION_MINUTES:-60}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin_password}
+      RABBITMQ_EXCHANGE: content_exchange
+      RABBITMQ_ROUTING_KEY: raw.youtube
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-content_filter_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - youtube_downloads:/tmp/youtube_downloads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Summarization Service
+  summarization-service:
+    build:
+      context: ./services/summarization-service
+      dockerfile: Dockerfile
+    container_name: content_filter_summarization_service
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin_password}
+      RABBITMQ_EXCHANGE: content_exchange
+      RABBITMQ_INPUT_ROUTING_KEY: raw.*
+      RABBITMQ_OUTPUT_ROUTING_KEY_PREFIX: processed
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-content_filter_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      SUMMARIZATION_MODEL: ${SUMMARIZATION_MODEL:-IlyaGusev/mbart_ru_sum_gazeta}
+      SENTIMENT_MODEL: ${SENTIMENT_MODEL:-blanchefort/rubert-base-cased-sentiment}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-DeepPavlov/rubert-base-cased}
+      USE_GPU: ${USE_GPU:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PREFETCH_COUNT: ${PREFETCH_COUNT:-1}
+      DEFAULT_MAX_LENGTH: ${DEFAULT_MAX_LENGTH:-150}
+      DEFAULT_MIN_LENGTH: ${DEFAULT_MIN_LENGTH:-50}
+    volumes:
+      - nlp_models:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # Ranking Service
+  ranking-service:
+    build:
+      context: .
+      dockerfile: services/ranking-service/Dockerfile
+    container_name: content_filter_ranking_service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-content_filter_db}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      GRPC_PORT: 50053
+      MODEL_NAME: ${RANKING_MODEL:-DeepPavlov/rubert-base-cased}
+      EMBEDDING_DIM: 768
+      MAX_LENGTH: 512
+      DEFAULT_LIMIT: 10
+      MIN_SIMILARITY: 0.5
+      FEEDBACK_WEIGHT: 0.3
+      RELEVANT_BOOST: 1.0
+      NOT_RELEVANT_PENALTY: -0.5
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "50053:50053"
+    volumes:
+      - nlp_models:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Digest Service
+  digest-service:
+    build:
+      context: .
+      dockerfile: services/digest-service/Dockerfile
+    container_name: content_filter_digest_service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-content_filter_db}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      GRPC_PORT: 50052
+      GRPC_MAX_WORKERS: 10
+      USER_SERVICE_HOST: user-service
+      USER_SERVICE_PORT: 50051
+      RANKING_SERVICE_HOST: ranking-service
+      RANKING_SERVICE_PORT: 50053
+      BOT_SERVICE_HOST: bot-service
+      BOT_SERVICE_PORT: 50054
+      SCHEDULER_ENABLED: ${DIGEST_SCHEDULER_ENABLED:-true}
+      SCHEDULER_CHECK_INTERVAL: ${DIGEST_CHECK_INTERVAL:-60}
+      DEFAULT_DIGEST_INTERVAL_HOURS: ${DEFAULT_DIGEST_INTERVAL_HOURS:-8}
+      DEFAULT_MAX_ITEMS: ${DEFAULT_MAX_ITEMS:-10}
+      MIN_CONTENT_AGE_MINUTES: ${MIN_CONTENT_AGE_MINUTES:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "50052:50052"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      ranking-service:
+        condition: service_started
+    networks:
+      - content_filter_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+volumes:
+  postgres_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  telegram_sessions:
+    driver: local
+  youtube_downloads:
+    driver: local
+  nlp_models:
+    driver: local
+  ranking_models:
+    driver: local
+
+networks:
+  content_filter_network:
+    driver: bridge

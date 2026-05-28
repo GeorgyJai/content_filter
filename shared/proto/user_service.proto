@@ -1,0 +1,161 @@
+syntax = "proto3";
+
+package user_service;
+
+// ============================================
+// User Service - Управление пользователями и подписками
+// ============================================
+
+service UserService {
+    // Управление пользователями
+    rpc CreateUser(CreateUserRequest) returns (UserResponse);
+    rpc GetUser(GetUserRequest) returns (UserResponse);
+    rpc GetUserByTelegramId(GetUserByTelegramIdRequest) returns (UserResponse);
+    
+    // Управление профилями
+    rpc GetUserProfile(GetUserProfileRequest) returns (UserProfileResponse);
+    rpc UpdateUserPreferences(UpdatePreferencesRequest) returns (UserProfileResponse);
+    rpc UpdateInterestsEmbedding(UpdateInterestsEmbeddingRequest) returns (UserProfileResponse);
+    
+    // Управление подписками
+    rpc AddSubscription(AddSubscriptionRequest) returns (SubscriptionResponse);
+    rpc RemoveSubscription(RemoveSubscriptionRequest) returns (SubscriptionResponse);
+    rpc GetUserSubscriptions(GetSubscriptionsRequest) returns (SubscriptionsListResponse);
+    rpc UpdateSubscriptionInterestLevel(UpdateInterestLevelRequest) returns (SubscriptionResponse);
+    
+    // Получение источников
+    rpc GetOrCreateSource(GetOrCreateSourceRequest) returns (SourceResponse);
+}
+
+// ============================================
+// Сообщения для пользователей
+// ============================================
+
+message CreateUserRequest {
+    string username = 1;
+    string platform = 2;
+    int64 telegram_id = 3;
+}
+
+message GetUserRequest {
+    int32 user_id = 1;
+}
+
+message GetUserByTelegramIdRequest {
+    int64 telegram_id = 1;
+}
+
+message UserResponse {
+    int32 user_id = 1;
+    string username = 2;
+    string platform = 3;
+    int64 telegram_id = 4;
+    string created_at = 5;
+    bool success = 6;
+    string message = 7;
+}
+
+// ============================================
+// Сообщения для профилей
+// ============================================
+
+message GetUserProfileRequest {
+    int32 user_id = 1;
+}
+
+message UserProfileResponse {
+    int32 profile_id = 1;
+    int32 user_id = 2;
+    string preferences_json = 3;
+    string interests_text = 4;
+    int32 digest_interval_hours = 5;
+    string digest_time = 6;
+    int32 retention_days = 7;
+    string updated_at = 8;
+    bool success = 9;
+    string message = 10;
+}
+
+message UpdatePreferencesRequest {
+    int32 user_id = 1;
+    string preferences_json = 2;
+    optional string interests_text = 3;
+    optional int32 digest_interval_hours = 4;
+    optional string digest_time = 5;
+    optional int32 retention_days = 6;
+}
+
+message UpdateInterestsEmbeddingRequest {
+    int32 user_id = 1;
+    repeated float embedding = 2; // 768-dimensional vector
+}
+
+// ============================================
+// Сообщения для подписок
+// ============================================
+
+message AddSubscriptionRequest {
+    int32 user_id = 1;
+    string source_url = 2;
+    string platform_type = 3;
+    optional string source_name = 4;
+    optional string interest_level = 5; // very_interested, interested, maybe, not_interested
+}
+
+message RemoveSubscriptionRequest {
+    int32 user_id = 1;
+    int32 source_id = 2;
+}
+
+message UpdateInterestLevelRequest {
+    int32 user_id = 1;
+    int32 source_id = 2;
+    string interest_level = 3;
+}
+
+message SubscriptionResponse {
+    int32 subscription_id = 1;
+    int32 source_id = 2;
+    bool success = 3;
+    string message = 4;
+}
+
+message GetSubscriptionsRequest {
+    int32 user_id = 1;
+}
+
+message SubscriptionsListResponse {
+    repeated Subscription subscriptions = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message Subscription {
+    int32 subscription_id = 1;
+    int32 source_id = 2;
+    string source_url = 3;
+    string platform_type = 4;
+    string source_name = 5;
+    string interest_level = 6;
+    string subscribed_at = 7;
+}
+
+// ============================================
+// Сообщения для источников
+// ============================================
+
+message GetOrCreateSourceRequest {
+    string platform_type = 1;
+    string url = 2;
+    optional string source_name = 3;
+    optional string topic = 4;
+}
+
+message SourceResponse {
+    int32 source_id = 1;
+    string platform_type = 2;
+    string url = 3;
+    string source_name = 4;
+    bool success = 5;
+    string message = 6;
+}

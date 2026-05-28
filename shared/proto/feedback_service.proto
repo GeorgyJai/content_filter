@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+package feedback_service;
+
+// ============================================
+// Feedback Service - Управление обратной связью
+// ============================================
+
+service FeedbackService {
+    // Сохранение обратной связи
+    rpc SaveFeedback(SaveFeedbackRequest) returns (FeedbackResponse);
+    rpc SaveBatchFeedback(SaveBatchFeedbackRequest) returns (BatchFeedbackResponse);
+    
+    // Получение обратной связи
+    rpc GetUserFeedback(GetUserFeedbackRequest) returns (UserFeedbackResponse);
+    rpc GetContentFeedback(GetContentFeedbackRequest) returns (ContentFeedbackResponse);
+    
+    // Оценка качества потребления
+    rpc SaveQualityRating(SaveQualityRatingRequest) returns (QualityRatingResponse);
+    rpc GetUserQualityRatings(GetQualityRatingsRequest) returns (QualityRatingsResponse);
+    rpc GetQualityStatistics(GetQualityStatisticsRequest) returns (QualityStatisticsResponse);
+}
+
+// ============================================
+// Сообщения для обратной связи
+// ============================================
+
+message SaveFeedbackRequest {
+    int32 user_id = 1;
+    int32 content_id = 2;
+    string reaction = 3; // relevant, not_relevant, saved, hidden
+}
+
+message FeedbackResponse {
+    int32 feedback_id = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message SaveBatchFeedbackRequest {
+    repeated SaveFeedbackRequest feedbacks = 1;
+}
+
+message BatchFeedbackResponse {
+    int32 saved_count = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message GetUserFeedbackRequest {
+    int32 user_id = 1;
+    optional int32 limit = 2;
+    optional string reaction_filter = 3; // Фильтр по типу реакции
+}
+
+message UserFeedbackResponse {
+    repeated FeedbackItem items = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message FeedbackItem {
+    int32 feedback_id = 1;
+    int32 content_id = 2;
+    string reaction = 3;
+    string created_at = 4;
+}
+
+message GetContentFeedbackRequest {
+    int32 content_id = 1;
+}
+
+message ContentFeedbackResponse {
+    int32 content_id = 1;
+    int32 relevant_count = 2;
+    int32 not_relevant_count = 3;
+    int32 saved_count = 4;
+    int32 hidden_count = 5;
+    bool success = 6;
+    string message = 7;
+}
+
+// ============================================
+// Сообщения для оценки качества
+// ============================================
+
+message SaveQualityRatingRequest {
+    int32 user_id = 1;
+    optional int32 digest_id = 2;
+    int32 rating = 3; // 1-10
+    optional string comment = 4;
+}
+
+message QualityRatingResponse {
+    int32 rating_id = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message GetQualityRatingsRequest {
+    int32 user_id = 1;
+    optional int32 limit = 2;
+    optional string period_start = 3; // ISO 8601 timestamp
+    optional string period_end = 4;
+}
+
+message QualityRatingsResponse {
+    repeated QualityRatingItem ratings = 1;
+    float average_rating = 2;
+    bool success = 3;
+    string message = 4;
+}
+
+message QualityRatingItem {
+    int32 rating_id = 1;
+    int32 digest_id = 2;
+    int32 rating = 3;
+    string comment = 4;
+    string created_at = 5;
+}
+
+message GetQualityStatisticsRequest {
+    int32 user_id = 1;
+    optional int32 weeks = 2; // Количество недель для статистики (по умолчанию 4)
+}
+
+message QualityStatisticsResponse {
+    repeated WeeklyStatistics weekly_stats = 1;
+    float overall_average = 2;
+    string trend = 3; // improving, stable, declining
+    bool success = 4;
+    string message = 5;
+}
+
+message WeeklyStatistics {
+    int32 week_number = 1;
+    string week_start = 2;
+    string week_end = 3;
+    float average_rating = 4;
+    int32 ratings_count = 5;
+    string plant_emoji = 6; // 🌸, 🌿, 🥀 для визуализации
+}

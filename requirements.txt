@@ -1,0 +1,16 @@
+# Database
+psycopg2-binary==2.9.9
+pgvector==0.2.4
+
+# Message Broker
+pika==1.3.2
+
+# Environment
+python-dotenv==1.0.0
+
+# HTTP requests
+requests==2.31.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1

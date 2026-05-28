@@ -1,0 +1,222 @@
+{
+  "rabbit_version": "3.12.0",
+  "rabbitmq_version": "3.12.0",
+  "users": [
+    {
+      "name": "admin",
+      "password": "admin_password",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": ["administrator"]
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "admin",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "content_exchange",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "task_exchange",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "event_exchange",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "error_exchange",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "raw_content_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "error_exchange",
+        "x-dead-letter-routing-key": "error.collector",
+        "x-max-length": 50000
+      }
+    },
+    {
+      "name": "processed_content_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 604800000,
+        "x-dead-letter-exchange": "error_exchange",
+        "x-dead-letter-routing-key": "error.processing",
+        "x-max-length": 100000
+      }
+    },
+    {
+      "name": "summarization_task_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-dead-letter-exchange": "error_exchange",
+        "x-dead-letter-routing-key": "error.summarization",
+        "x-max-length": 10000
+      }
+    },
+    {
+      "name": "ranking_task_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-dead-letter-exchange": "error_exchange",
+        "x-dead-letter-routing-key": "error.ranking",
+        "x-max-length": 10000
+      }
+    },
+    {
+      "name": "digest_generation_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-dead-letter-exchange": "error_exchange",
+        "x-dead-letter-routing-key": "error.digest",
+        "x-max-length": 5000
+      }
+    },
+    {
+      "name": "profile_update_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-max-length": 20000
+      }
+    },
+    {
+      "name": "feedback_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-max-length": 20000
+      }
+    },
+    {
+      "name": "error_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 2592000000,
+        "x-max-length": 10000
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "content_exchange",
+      "vhost": "/",
+      "destination": "raw_content_queue",
+      "destination_type": "queue",
+      "routing_key": "raw.*",
+      "arguments": {}
+    },
+    {
+      "source": "content_exchange",
+      "vhost": "/",
+      "destination": "processed_content_queue",
+      "destination_type": "queue",
+      "routing_key": "processed.*",
+      "arguments": {}
+    },
+    {
+      "source": "task_exchange",
+      "vhost": "/",
+      "destination": "summarization_task_queue",
+      "destination_type": "queue",
+      "routing_key": "task.summarization",
+      "arguments": {}
+    },
+    {
+      "source": "task_exchange",
+      "vhost": "/",
+      "destination": "ranking_task_queue",
+      "destination_type": "queue",
+      "routing_key": "task.ranking",
+      "arguments": {}
+    },
+    {
+      "source": "task_exchange",
+      "vhost": "/",
+      "destination": "digest_generation_queue",
+      "destination_type": "queue",
+      "routing_key": "task.digest",
+      "arguments": {}
+    },
+    {
+      "source": "event_exchange",
+      "vhost": "/",
+      "destination": "profile_update_queue",
+      "destination_type": "queue",
+      "routing_key": "event.profile_update",
+      "arguments": {}
+    },
+    {
+      "source": "event_exchange",
+      "vhost": "/",
+      "destination": "feedback_queue",
+      "destination_type": "queue",
+      "routing_key": "event.feedback",
+      "arguments": {}
+    },
+    {
+      "source": "error_exchange",
+      "vhost": "/",
+      "destination": "error_queue",
+      "destination_type": "queue",
+      "routing_key": "error.*",
+      "arguments": {}
+    }
+  ]
+}

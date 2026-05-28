@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package summarization_service;
+
+// ============================================
+// Summarization Service - Суммаризация и NLP-обработка
+// ============================================
+
+service SummarizationService {
+    // Суммаризация текста
+    rpc SummarizeText(SummarizeRequest) returns (SummarizeResponse);
+    rpc SummarizeBatch(SummarizeBatchRequest) returns (SummarizeBatchResponse);
+    
+    // Адаптивная суммаризация с учетом уровня интереса
+    rpc AdaptiveSummarize(AdaptiveSummarizeRequest) returns (SummarizeResponse);
+    
+    // Анализ тональности
+    rpc AnalyzeSentiment(SentimentRequest) returns (SentimentResponse);
+    
+    // Извлечение ключевых тем/тегов
+    rpc ExtractTopics(ExtractTopicsRequest) returns (TopicsResponse);
+}
+
+// ============================================
+// Сообщения для суммаризации
+// ============================================
+
+message SummarizeRequest {
+    string text = 1;
+    optional int32 max_length = 2; // Максимальная длина резюме в словах (по умолчанию 150)
+    optional int32 min_length = 3; // Минимальная длина резюме в словах (по умолчанию 50)
+}
+
+message SummarizeResponse {
+    string summary = 1;
+    int32 original_length = 2; // Длина оригинального текста в словах
+    int32 summary_length = 3;  // Длина резюме в словах
+    float compression_ratio = 4; // Коэффициент сжатия
+    bool success = 5;
+    string message = 6;
+}
+
+message SummarizeBatchRequest {
+    repeated TextItem texts = 1;
+}
+
+message TextItem {
+    int32 content_id = 1;
+    string text = 2;
+    optional int32 max_length = 3;
+}
+
+message SummarizeBatchResponse {
+    repeated SummaryItem summaries = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message SummaryItem {
+    int32 content_id = 1;
+    string summary = 2;
+    int32 summary_length = 3;
+}
+
+// ============================================
+// Сообщения для адаптивной суммаризации
+// ============================================
+
+message AdaptiveSummarizeRequest {
+    string text = 1;
+    string interest_level = 2; // very_interested, interested, maybe, not_interested
+}
+
+// Уровни детализации:
+// - very_interested: 200-300 слов
+// - interested: 100-150 слов
+// - maybe: 50-100 слов
+// - not_interested: 20-30 слов (только заголовок)
+
+// ============================================
+// Сообщения для анализа тональности
+// ============================================
+
+message SentimentRequest {
+    string text = 1;
+}
+
+message SentimentResponse {
+    float sentiment_score = 1; // От -1 (негативный) до 1 (позитивный)
+    string sentiment_label = 2; // negative, neutral, positive
+    float confidence = 3; // Уверенность модели (0-1)
+    bool success = 4;
+    string message = 5;
+}
+
+// ============================================
+// Сообщения для извлечения тем
+// ============================================
+
+message ExtractTopicsRequest {
+    string text = 1;
+    optional int32 max_topics = 2; // Максимальное количество тем (по умолчанию 5)
+}
+
+message TopicsResponse {
+    repeated string topics = 1;
+    repeated float topic_scores = 2; // Релевантность каждой темы (0-1)
+    bool success = 3;
+    string message = 4;
+}

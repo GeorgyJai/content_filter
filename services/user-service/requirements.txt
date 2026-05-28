@@ -1,0 +1,11 @@
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+
+# gRPC
+grpcio==1.60.0
+grpcio-tools==1.60.0
+protobuf==4.25.1
+
+# Utilities
+python-dotenv==1.0.0

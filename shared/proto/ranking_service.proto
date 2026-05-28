@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package ranking_service;
+
+// ============================================
+// Ranking Service - Ранжирование и векторный поиск
+// ============================================
+
+service RankingService {
+    // Генерация эмбеддингов
+    rpc GenerateEmbedding(GenerateEmbeddingRequest) returns (EmbeddingResponse);
+    rpc GenerateBatchEmbeddings(GenerateBatchEmbeddingsRequest) returns (BatchEmbeddingsResponse);
+    
+    // Ранжирование контента
+    rpc RankContentForUser(RankContentRequest) returns (RankedContentResponse);
+    rpc CalculateRelevance(CalculateRelevanceRequest) returns (RelevanceResponse);
+    
+    // Векторный поиск
+    rpc FindSimilarContent(FindSimilarContentRequest) returns (SimilarContentResponse);
+    
+    // Обновление профиля пользователя на основе обратной связи
+    rpc UpdateUserInterestsFromFeedback(UpdateInterestsRequest) returns (UpdateInterestsResponse);
+}
+
+// ============================================
+// Сообщения для генерации эмбеддингов
+// ============================================
+
+message GenerateEmbeddingRequest {
+    string text = 1;
+}
+
+message EmbeddingResponse {
+    repeated float embedding = 1; // 768-dimensional vector
+    bool success = 2;
+    string message = 3;
+}
+
+message GenerateBatchEmbeddingsRequest {
+    repeated string texts = 1;
+}
+
+message BatchEmbeddingsResponse {
+    repeated EmbeddingVector embeddings = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message EmbeddingVector {
+    repeated float values = 1;
+}
+
+// ============================================
+// Сообщения для ранжирования
+// ============================================
+
+message RankContentRequest {
+    int32 user_id = 1;
+    repeated int32 content_ids = 2;
+    optional int32 limit = 3; // Количество топ-элементов (по умолчанию все)
+}
+
+message RankedContentResponse {
+    repeated RankedContent items = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message RankedContent {
+    int32 content_id = 1;
+    float relevance_score = 2;
+    int32 rank = 3;
+}
+
+message CalculateRelevanceRequest {
+    repeated float content_embedding = 1;
+    repeated float user_interests_embedding = 2;
+}
+
+message RelevanceResponse {
+    float relevance_score = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+// ============================================
+// Сообщения для векторного поиска
+// ============================================
+
+message FindSimilarContentRequest {
+    int32 content_id = 1;
+    optional int32 limit = 2; // Количество похожих элементов (по умолчанию 10)
+    optional float min_similarity = 3; // Минимальная схожесть (0-1)
+}
+
+message SimilarContentResponse {
+    repeated SimilarContent items = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message SimilarContent {
+    int32 content_id = 1;
+    float similarity_score = 2;
+}
+
+// ============================================
+// Сообщения для обновления интересов
+// ============================================
+
+message UpdateInterestsRequest {
+    int32 user_id = 1;
+    repeated FeedbackItem feedback_items = 2;
+}
+
+message FeedbackItem {
+    int32 content_id = 1;
+    string reaction = 2; // relevant, not_relevant
+    repeated float content_embedding = 3;
+}
+
+message UpdateInterestsResponse {
+    repeated float new_interests_embedding = 1;
+    bool success = 2;
+    string message = 3;
+}

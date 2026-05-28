@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package digest_service;
+
+// ============================================
+// Digest Service - Генерация и управление дайджестами
+// ============================================
+
+service DigestService {
+    // Генерация дайджестов
+    rpc GenerateDigest(GenerateDigestRequest) returns (DigestResponse);
+    rpc GetDigest(GetDigestRequest) returns (DigestResponse);
+    rpc GetUserDigests(GetUserDigestsRequest) returns (DigestsListResponse);
+    
+    // Управление дайджестами
+    rpc DeleteOldDigests(DeleteOldDigestsRequest) returns (DeleteDigestsResponse);
+    rpc UpdateDigestMessageId(UpdateDigestMessageIdRequest) returns (DigestResponse);
+}
+
+// ============================================
+// Сообщения для генерации дайджестов
+// ============================================
+
+message GenerateDigestRequest {
+    int32 user_id = 1;
+    string period_start = 2; // ISO 8601 timestamp
+    string period_end = 3;   // ISO 8601 timestamp
+    optional int32 max_items = 4; // Максимальное количество элементов (по умолчанию 10)
+}
+
+message DigestResponse {
+    int32 digest_id = 1;
+    int32 user_id = 2;
+    repeated DigestItem items = 3;
+    string formatted_text = 4;
+    int32 items_count = 5;
+    string period_start = 6;
+    string period_end = 7;
+    string created_at = 8;
+    bool success = 9;
+    string message = 10;
+}
+
+message DigestItem {
+    int32 item_id = 1;
+    int32 content_id = 2;
+    string annotation = 3;
+    int32 rank = 4;
+    float relevance_score = 5;
+    string source_name = 6;
+    string platform_type = 7;
+    string original_url = 8;
+    string published_at = 9;
+}
+
+// ============================================
+// Сообщения для получения дайджестов
+// ============================================
+
+message GetDigestRequest {
+    int32 digest_id = 1;
+}
+
+message GetUserDigestsRequest {
+    int32 user_id = 1;
+    optional int32 limit = 2; // Количество последних дайджестов (по умолчанию 10)
+}
+
+message DigestsListResponse {
+    repeated DigestResponse digests = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+// ============================================
+// Сообщения для управления дайджестами
+// ============================================
+
+message DeleteOldDigestsRequest {
+    int32 user_id = 1;
+    int32 retention_days = 2;
+}
+
+message DeleteDigestsResponse {
+    int32 deleted_count = 1;
+    repeated int64 telegram_message_ids = 2; // ID сообщений для удаления в Telegram
+    bool success = 3;
+    string message = 4;
+}
+
+message UpdateDigestMessageIdRequest {
+    int32 digest_id = 1;
+    int64 telegram_message_id = 2;
+}
